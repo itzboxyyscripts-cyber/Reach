@@ -1,0 +1,213 @@
+-- Load Rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Core variables
+local trueActive = true
+local reachType = "Sphere"
+local dmgEnabled = true
+local visualizerEnabled = false
+local godmodeEnabled = false
+local reach = 100
+
+local plr = game.Players.LocalPlayer
+local godmodeConnection = nil
+
+-- Visualizer part
+local visualizer = Instance.new("Part")
+visualizer.BrickColor = BrickColor.Blue()
+visualizer.Transparency = 0.6
+visualizer.Anchored = true
+visualizer.CanCollide = false
+visualizer.Size = Vector3.new(0.5, 0.5, 0.5)
+visualizer.BottomSurface = Enum.SurfaceType.Smooth
+visualizer.TopSurface = Enum.SurfaceType.Smooth
+
+local function applyGodmode(char)
+    if godmodeConnection then
+        godmodeConnection:Disconnect()
+        godmodeConnection = nil
+    end
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    humanoid.MaxHealth = math.huge
+    humanoid.Health = math.huge
+    -- Every time health changes, instantly restore it
+    godmodeConnection = humanoid.HealthChanged:Connect(function(health)
+        if godmodeEnabled and health < humanoid.MaxHealth then
+            humanoid.Health = math.huge
+        end
+    end)
+end
+
+local function removeGodmode(char)
+    if godmodeConnection then
+        godmodeConnection:Disconnect()
+        godmodeConnection = nil
+    end
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.MaxHealth = 100
+        humanoid.Health = 100
+    end
+end
+
+-- Re-apply on respawn
+plr.CharacterAdded:Connect(function(char)
+    if godmodeEnabled then
+        char:WaitForChild("Humanoid")
+        applyGodmode(char)
+    end
+end)
+
+-- Create Rayfield Window
+local Window = Rayfield:CreateWindow({
+    Name = "Reach Script",
+    LoadingTitle = "Reach Script",
+    LoadingSubtitle = "Loading...",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false,
+})
+
+Rayfield:Notify({
+    Title = "Reach Script",
+    Content = "Script loaded successfully!",
+    Duration = 3,
+})
+
+local Tab = Window:CreateTab("Settings")
+
+Tab:CreateSlider({
+    Name = "Reach",
+    Range = {1, 9999},
+    Increment = 1,
+    Suffix = "studs",
+    CurrentValue = 100,
+    Flag = "ReachSlider",
+    Callback = function(Value)
+        reach = Value
+    end,
+})
+
+Tab:CreateDropdown({
+    Name = "Shape",
+    Options = {"Sphere", "Line"},
+    CurrentOption = {"Sphere"},
+    MultipleOptions = false,
+    Flag = "ShapeDropdown",
+    Callback = function(Option)
+        reachType = type(Option) == "table" and Option[1] or Option
+    end,
+})
+
+Tab:CreateToggle({
+    Name = "Damage",
+    CurrentValue = true,
+    Flag = "DamageToggle",
+    Callback = function(Value)
+        dmgEnabled = Value
+    end,
+})
+
+Tab:CreateToggle({
+    Name = "Visualizer",
+    CurrentValue = false,
+    Flag = "VisualizerToggle",
+    Callback = function(Value)
+        visualizerEnabled = Value
+        if not Value then
+            visualizer.Parent = nil
+        end
+    end,
+})
+
+Tab:CreateToggle({
+    Name = "God Mode",
+    CurrentValue = false,
+    Flag = "GodModeToggle",
+    Callback = function(Value)
+        godmodeEnabled = Value
+        local char = plr.Character
+        if Value then
+            applyGodmode(char)
+        else
+            removeGodmode(char)
+        end
+    end,
+})
+
+Tab:CreateButton({
+    Name = "Close Script",
+    Callback = function()
+        trueActive = false
+        visualizer.Parent = nil
+        if godmodeConnection then godmodeConnection:Disconnect() end
+        Rayfield:Destroy()
+    end,
+})
+
+local function damageCharacter(character)
+    if not dmgEnabled then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Health > 0 then
+        humanoid.Health = 0
+    end
+end
+
+game:GetService("RunService").RenderStepped:Connect(function()
+    if not trueActive then return end
+
+    local char = plr.Character
+    local tool = char and char:FindFirstChildOfClass("Tool")
+
+    if not tool then
+        visualizer.Parent = nil
+        return
+    end
+
+    local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildOfClass("BasePart")
+    if not handle then return end
+
+    if visualizerEnabled then
+        visualizer.Parent = workspace
+        local visSize = math.min(reach, 2048)
+        if reachType == "Sphere" then
+            visualizer.Shape = Enum.PartType.Ball
+            visualizer.Material = Enum.Material.ForceField
+            visualizer.Transparency = 0
+            visualizer.Size = Vector3.new(visSize, visSize, visSize)
+            visualizer.CFrame = handle.CFrame
+        else
+            visualizer.Shape = Enum.PartType.Block
+            visualizer.Size = Vector3.new(1, 0.8, visSize)
+            visualizer.CFrame = handle.CFrame * CFrame.new(0, 0, (visSize / 2) + 2)
+        end
+    else
+        visualizer.Parent = nil
+    end
+
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v ~= plr then
+            local victimChar = v.Character
+            local hrp = victimChar and victimChar:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                if reachType == "Sphere" then
+                    local distance = (hrp.Position - handle.Position).Magnitude
+                    if distance <= reach then
+                        damageCharacter(victimChar)
+                    end
+                elseif reachType == "Line" then
+                    local origin = handle.Position
+                    local direction = handle.CFrame.LookVector * -1
+                    local toTarget = hrp.Position - origin
+                    local dot = toTarget:Dot(direction)
+                    local closestPoint = origin + direction * math.clamp(dot, 0, reach)
+                    local distFromLine = (hrp.Position - closestPoint).Magnitude
+                    if dot >= 0 and dot <= reach and distFromLine <= 5 then
+                        damageCharacter(victimChar)
+                    end
+                end
+            end
+        end
+    end
+end) 
