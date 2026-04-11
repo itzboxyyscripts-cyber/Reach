@@ -201,13 +201,5 @@ game:GetService("RunService").RenderStepped:Connect(function()
                     local direction = handle.CFrame.LookVector * -1
                     local toTarget = hrp.Position - origin
                     local dot = toTarget:Dot(direction)
-                    local closestPoint = origin + direction * math.clamp(dot, 0, reach)
-                    local distFromLine = (hrp.Position - closestPoint).Magnitude
-                    if dot >= 0 and dot <= reach and distFromLine <= 5 then
-                        damageCharacter(victimChar)
-                    end
-                end
-            end
-        end
-    end
+                    local closestPoint = origin + direction * 
 end) 
